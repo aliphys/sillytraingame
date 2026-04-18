@@ -302,6 +302,7 @@ let playerConns = [null, null];
 // ── Game state ────────────────────────────────────────────────────────────────
 let gameState     = null;
 let trails        = [[], []];
+let collectEffects = []; // { x, y, t, idx } — canvas burst on star collect
 let gameTimer     = null;
 let cdTimer       = null;
 let renderStarted = false;
@@ -324,7 +325,8 @@ const IOT_P_RGB = [[110, 198, 245], [245, 160, 110]]; // player LED colors
 
 let iotWs         = [null, null];
 let iotEnabled    = false;
-let iotFlashTimer = [null, null];
+let iotFlashTimer   = [null, null];
+let iotPatternTimer = [null, null];
 // separate tracking for IoT (only runs on host)
 let iotPrevScores    = [-1, -1];
 let iotPrevWinner    = null;
@@ -418,6 +420,59 @@ function flashDevice(playerIdx, r, g, b, ms) {
   }, ms);
 }
 
+function clearIoTPattern(playerIdx) {
+  if (iotPatternTimer[playerIdx]) { clearInterval(iotPatternTimer[playerIdx]); iotPatternTimer[playerIdx] = null; }
+}
+function clearIoTPatterns() { clearIoTPattern(0); clearIoTPattern(1); }
+
+function playCelebrationPattern(playerIdx) {
+  clearIoTPattern(playerIdx);
+  const [pr, pg, pb] = IOT_P_RGB[playerIdx];
+  // Gold → white → player → green cycle, then settle on green
+  const frames = [
+    [255, 210,   0],
+    [255, 255, 255],
+    [ pr,  pg,  pb],
+    [255, 210,   0],
+    [200, 255, 200],
+    [255, 255, 255],
+    [ pr,  pg,  pb],
+    [255, 210,   0],
+    [255, 255, 255],
+    [  0, 220,  80],
+  ];
+  let fi = 0;
+  iotPatternTimer[playerIdx] = setInterval(() => {
+    const [r, g, b] = frames[fi % frames.length];
+    setDeviceColor(playerIdx, r, g, b);
+    fi++;
+    if (fi >= frames.length * 2) {
+      clearIoTPattern(playerIdx);
+      setDeviceColor(playerIdx, 0, 220, 80);
+    }
+  }, 110);
+}
+
+function playLossPattern(playerIdx) {
+  clearIoTPattern(playerIdx);
+  const [pr, pg, pb] = IOT_P_RGB[playerIdx];
+  let step = 0;
+  const totalSteps = 32;
+  iotPatternTimer[playerIdx] = setInterval(() => {
+    const t  = Math.min(step / 16, 1);
+    const pulse = 0.35 + 0.65 * Math.abs(Math.sin(step * 0.45));
+    const r = Math.round((pr * (1 - t) + 130 * t) * pulse);
+    const g = Math.round((pg * (1 - t) +   8 * t) * pulse);
+    const b = Math.round((pb * (1 - t) +   8 * t) * pulse);
+    setDeviceColor(playerIdx, r, g, b);
+    step++;
+    if (step >= totalSteps) {
+      clearIoTPattern(playerIdx);
+      setDeviceColor(playerIdx, 70, 6, 6);
+    }
+  }, 95);
+}
+
 function onIoTButtonPress(playerIdx) {
   unlockAudio();
   if (!gameState) return;
@@ -442,10 +497,10 @@ function checkIoTFeedback() {
     }
   });
 
-  // Game over — green for winner, dark red for loser
+  // Game over — celebration for winner, loss pattern for loser
   if (winner !== null && iotPrevWinner === null) {
-    setDeviceColor(winner,     0, 220, 80);
-    setDeviceColor(1 - winner, 120, 15, 15);
+    playCelebrationPattern(winner);
+    playLossPattern(1 - winner);
   }
   iotPrevWinner = winner;
 
@@ -472,8 +527,8 @@ function connectIoT() {
 
     ws.onopen = () => {
       updateIoTDot(idx, 'connected');
-      // Dim neutral glow while in lobby
-      sendToDevice(idx, 'set_row', '0,20,20,40');
+      const [r, g, b] = IOT_P_RGB[idx];
+      setDeviceColor(idx, r, g, b); // show player color immediately
     };
 
     ws.onmessage = e => {
@@ -834,12 +889,14 @@ function stopTimers() {
 function beginCountdown() {
   stopTimers();
   trails = [[], []];
+  collectEffects = [];
   prevScores = [-1, -1]; prevWinner = null; prevCountdown = null;
   iotPrevScores = [-1, -1]; iotPrevWinner = null; iotPrevCountdown = null;
+  clearIoTPatterns();
   activeHoops = MAPS[selectedMapIdx].hoops;
   gameState = makeState();
   gameState.countdown = 3;
-  // Dim devices during countdown lead-in
+  // Dim player colors during countdown lead-in
   if (iotEnabled) IOT_P_RGB.forEach(([r, g, b], i) => setDeviceColor(i, Math.round(r*0.25), Math.round(g*0.25), Math.round(b*0.25)));
   broadcast(); refreshUI(); refreshBtn();
 
@@ -888,7 +945,12 @@ function checkAudioEvents() {
   const { players, winner, countdown } = gameState;
 
   players.forEach((p, i) => {
-    if (p.score > prevScores[i]) { playCollectSnd(); prevScores[i] = p.score; }
+    if (p.score > prevScores[i]) {
+      playCollectSnd();
+      prevScores[i] = p.score;
+      const pos = hPos(p.hoop, p.angle);
+      collectEffects.push({ x: pos.x, y: pos.y, t: Date.now(), idx: i });
+    }
   });
 
   if (winner !== null && prevWinner === null) playWinSnd();
@@ -1116,6 +1178,35 @@ function renderLoop() {
   const { players, stars, gameActive, winner, countdown } = gameState;
   stars.forEach(drawStar);
   players.forEach(drawTrain);
+
+  // Collect burst effects
+  const now = Date.now();
+  collectEffects = collectEffects.filter(e => now - e.t < 750);
+  collectEffects.forEach(e => {
+    const age = (now - e.t) / 750;
+    const col = P_COLORS[e.idx];
+    const rgb = P_RGB[e.idx];
+    ctx.save();
+    // Expanding ring
+    ctx.strokeStyle = col; ctx.lineWidth = 2.5 * (1 - age);
+    ctx.globalAlpha = (1 - age) * 0.85;
+    ctx.beginPath(); ctx.arc(e.x, e.y, age * 52, 0, Math.PI * 2); ctx.stroke();
+    // 8 particles flying outward
+    for (let a = 0; a < 8; a++) {
+      const angle = (a / 8) * Math.PI * 2;
+      const dist  = age * 44;
+      ctx.globalAlpha = (1 - age) * 0.9;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(e.x + Math.cos(angle) * dist, e.y + Math.sin(angle) * dist, 3.5 * (1 - age), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Fading star glow at center
+    ctx.globalAlpha = (1 - age) * 0.7;
+    ctx.fillStyle = STAR_COL; ctx.shadowColor = STAR_COL; ctx.shadowBlur = 10 * (1 - age);
+    ctx.beginPath(); ctx.arc(e.x, e.y, 9 * (1 - age), 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  });
 
   if (countdown !== null) {
     drawOverlay(countdown > 0 ? String(countdown) : 'GO!', 'Get ready…', '#e8e8f0');
