@@ -73,6 +73,25 @@ html, body { height: 100%; background: #12121f; color: #e8e8f0; font-family: sys
 .btn-copy:active { background: rgba(255,255,255,0.08); }
 .wait-label { font-size: 14px; color: rgba(255,255,255,0.35); }
 
+/* Map picker */
+.map-label {
+  align-self: flex-start; font-size: 11px; font-weight: 700; letter-spacing: 0.8px;
+  text-transform: uppercase; color: rgba(255,255,255,0.28);
+}
+.map-picks { display: flex; gap: 8px; width: 100%; }
+.map-pick {
+  flex: 1; padding: 10px 6px; border-radius: 10px; cursor: pointer;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+  text-align: center; -webkit-tap-highlight-color: transparent; user-select: none;
+  transition: background 0.12s, border-color 0.12s;
+}
+.map-pick.active {
+  background: rgba(110,198,245,0.13); border-color: rgba(110,198,245,0.45);
+}
+.map-pick:active { opacity: 0.75; }
+.map-pick-name { display: block; font-size: 13px; font-weight: 700; color: #e8e8f0; }
+.map-pick-desc { display: block; font-size: 10px; color: rgba(255,255,255,0.32); margin-top: 2px; }
+
 #game-screen { display: none; flex-direction: column; height: 100dvh; padding: 8px; gap: 8px; }
 #game-screen.active { display: flex; }
 
@@ -105,7 +124,22 @@ html, body { height: 100%; background: #12121f; color: #e8e8f0; font-family: sys
 <!-- ── Lobby ─────────────────────────────────────────────────────────────── -->
 <div class="screen active" id="lobby-screen">
   <div class="title">Hoop Trains</div>
-  <p class="sub">Race around circular hoops, switch tracks, collect stars.<br>First to 5 points wins!</p>
+  <p class="sub">Race around circular hoops, switch tracks, collect stars.<br>First to 20 points wins!</p>
+  <p class="map-label">Choose Map</p>
+  <div class="map-picks" id="map-picks">
+    <div class="map-pick active" data-map="0">
+      <span class="map-pick-name">Classic</span>
+      <span class="map-pick-desc">3 in a row</span>
+    </div>
+    <div class="map-pick" data-map="1">
+      <span class="map-pick-name">Triangle</span>
+      <span class="map-pick-desc">Hub &amp; spoke</span>
+    </div>
+    <div class="map-pick" data-map="2">
+      <span class="map-pick-name">Grid</span>
+      <span class="map-pick-desc">2×2 loops</span>
+    </div>
+  </div>
   <button class="btn-host" id="host-btn">Host a Game</button>
   <div class="divider">or play directly</div>
   <button class="btn-p1" id="create-btn">Create Game — Player 1</button>
@@ -148,51 +182,154 @@ html, body { height: 100%; background: #12121f; color: #e8e8f0; font-family: sys
 <script>
 // ── Constants ────────────────────────────────────────────────────────────────
 const W = 680, H = 420;
-const HOOPS = [
-  { x: 170, y: 210, r: 120 },
-  { x: 340, y: 210, r: 120 },
-  { x: 510, y: 210, r: 120 },
-];
 const P_COLORS  = ['#6ec6f5', '#f5a06e'];
 const P_RGB     = ['110,198,245', '245,160,110'];
 const STAR_COL  = '#f5e56e';
 const SW_COOL   = 1200;
-const WIN_SCORE = 5;
+const WIN_SCORE = 20;
 const STAR_RESP = 1800;
 const TICK_MS   = 33;
+
+// ── Maps ─────────────────────────────────────────────────────────────────────
+const MAPS = [
+  {
+    name: 'Classic',
+    hoops: [
+      { x: 170, y: 210, r: 120 },
+      { x: 340, y: 210, r: 120 },
+      { x: 510, y: 210, r: 120 },
+    ],
+    starts: [
+      { hoop: 0, angle: Math.PI * 0.5, dir:  1, speed: 0.018 },
+      { hoop: 2, angle: Math.PI * 1.5, dir: -1, speed: 0.022 },
+    ],
+  },
+  {
+    // Top hoop connects to both bottom hoops; bottom hoops are disconnected from each other.
+    name: 'Triangle',
+    hoops: [
+      { x: 340, y: 140, r: 115 },  // top   [0]
+      { x: 210, y: 310, r: 115 },  // bot-L [1]
+      { x: 470, y: 310, r: 115 },  // bot-R [2]
+    ],
+    starts: [
+      { hoop: 1, angle: Math.PI * 0.5, dir:  1, speed: 0.018 },
+      { hoop: 2, angle: Math.PI * 1.5, dir: -1, speed: 0.022 },
+    ],
+  },
+  {
+    // 2×2 grid — all four hoops connected horizontally and vertically.
+    name: 'Grid',
+    hoops: [
+      { x: 230, y: 140, r: 115 },  // top-L [0]
+      { x: 450, y: 140, r: 115 },  // top-R [1]
+      { x: 230, y: 300, r: 115 },  // bot-L [2]
+      { x: 450, y: 300, r: 115 },  // bot-R [3]
+    ],
+    starts: [
+      { hoop: 0, angle: Math.PI * 0.5, dir:  1, speed: 0.018 },
+      { hoop: 3, angle: Math.PI * 1.5, dir: -1, speed: 0.022 },
+    ],
+  },
+];
+
+let selectedMapIdx = 0;
+let activeHoops    = MAPS[0].hoops;
+
+// ── Map picker ────────────────────────────────────────────────────────────────
+document.getElementById('map-picks').addEventListener('click', e => {
+  const pick = e.target.closest('[data-map]');
+  if (!pick) return;
+  selectedMapIdx = parseInt(pick.dataset.map, 10);
+  document.querySelectorAll('.map-pick').forEach(el =>
+    el.classList.toggle('active', el === pick)
+  );
+  unlockAudio();
+});
 
 // ── Roles ─────────────────────────────────────────────────────────────────────
 //
 //  HOST (dedicated):  isHost=true,  isServer=true,  myIdx=null
-//    – runs the game loop; P1 and P2 both connect remotely
-//    – playerConns = [p1Conn, p2Conn]
-//
 //  PLAYER 1 (P2P):    isHost=true,  isServer=false, myIdx=0
-//    – runs the game loop AND plays; P2 connects remotely
-//    – playerConns = ['local', p2Conn]
-//
 //  REMOTE PLAYER:     isHost=false, isServer=false, myIdx=0|1
-//    – receives state from host; sends switch events via hostConn
 //
-// ─────────────────────────────────────────────────────────────────────────────
-let isHost       = false;
-let isServer     = false;
-let myIdx        = null;
+let isHost      = false;
+let isServer    = false;
+let myIdx       = null;
 
-let peer         = null;
-let hostConn     = null;          // remote player → host
-let playerConns  = [null, null];  // host → players (indexed by player slot)
+let peer        = null;
+let hostConn    = null;
+let playerConns = [null, null];
 
 // ── Game state ────────────────────────────────────────────────────────────────
-let gameState  = null;
-let trails     = [[], []];
-let gameTimer  = null;
-let cdTimer    = null;
+let gameState     = null;
+let trails        = [[], []];
+let gameTimer     = null;
+let cdTimer       = null;
 let renderStarted = false;
+
+// Audio event tracking
+let prevScores    = [-1, -1];
+let prevWinner    = null;
+let prevCountdown = null;
 
 // ── Canvas ───────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('gc');
 const ctx    = canvas.getContext('2d');
+
+// ── Audio ─────────────────────────────────────────────────────────────────────
+let audioCtx = null;
+
+function unlockAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playTone(freq, endFreq, type, gain, dur, startTime) {
+  if (!audioCtx) return;
+  const t = startTime ?? audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.connect(g); g.connect(audioCtx.destination);
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  if (endFreq !== freq) o.frequency.exponentialRampToValueAtTime(endFreq, t + dur);
+  g.gain.setValueAtTime(gain, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.start(t); o.stop(t + dur);
+}
+
+function playSwitchSnd() {
+  unlockAudio();
+  playTone(330, 520, 'square', 0.12, 0.18);
+}
+
+function playCollectSnd() {
+  unlockAudio();
+  playTone(660, 1100, 'sine', 0.18, 0.22);
+}
+
+function playCountdownSnd() {
+  unlockAudio();
+  playTone(350, 350, 'sine', 0.14, 0.14);
+}
+
+function playGoSnd() {
+  unlockAudio();
+  playTone(600, 600, 'sine', 0.18, 0.08);
+  setTimeout(() => playTone(800, 800, 'sine', 0.18, 0.12), 90);
+}
+
+function playWinSnd() {
+  unlockAudio();
+  if (!audioCtx) return;
+  const notes = [523, 659, 784, 1047];
+  notes.forEach((freq, i) => {
+    playTone(freq, freq, 'sine', 0.18, 0.28, audioCtx.currentTime + i * 0.13);
+  });
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function show(id) {
@@ -209,7 +346,7 @@ function showErr(msg) {
 }
 
 function hPos(hoop, angle) {
-  const h = HOOPS[hoop];
+  const h = activeHoops[hoop];
   return { x: h.x + Math.cos(angle) * h.r, y: h.y + Math.sin(angle) * h.r };
 }
 
@@ -239,6 +376,7 @@ if (urlCode) document.getElementById('code-input').value = urlCode.toUpperCase()
 
 // ── Lobby: Host Game ──────────────────────────────────────────────────────────
 document.getElementById('host-btn').addEventListener('click', () => {
+  unlockAudio();
   const btn = document.getElementById('host-btn');
   btn.disabled = true; btn.textContent = 'Setting up…';
 
@@ -272,6 +410,7 @@ document.getElementById('host-btn').addEventListener('click', () => {
 
 // ── Lobby: Create Game — P1 (P2P) ─────────────────────────────────────────────
 document.getElementById('create-btn').addEventListener('click', () => {
+  unlockAudio();
   const btn = document.getElementById('create-btn');
   btn.disabled = true; btn.textContent = 'Creating…';
 
@@ -280,7 +419,7 @@ document.getElementById('create-btn').addEventListener('click', () => {
 
   peer.on('open', () => {
     isHost = true; isServer = false; myIdx = 0;
-    playerConns = ['local', null]; // slot 0 = local P1, slot 1 = remote P2
+    playerConns = ['local', null];
     setWaitScreen(
       'You are Player 1',
       'Share this code with Player 2:',
@@ -303,11 +442,10 @@ document.getElementById('create-btn').addEventListener('click', () => {
   });
 });
 
-// ── Shared: incoming connection handler (used by both host types) ─────────────
+// ── Shared: incoming connection handler ──────────────────────────────────────
 function onIncomingConnection(incoming) {
-  // Find next available remote slot
   const idx = playerConns.indexOf(null);
-  if (idx === -1) { incoming.close(); return; } // room full
+  if (idx === -1) { incoming.close(); return; }
 
   incoming.on('open', () => {
     playerConns[idx] = incoming;
@@ -319,14 +457,11 @@ function onIncomingConnection(incoming) {
       refreshBtn();
     });
 
-    // Tell the player their assigned index
     incoming.send({ type: 'assigned', idx });
 
-    // Count remote connections (exclude 'local' sentinel)
     const remoteCount = playerConns.filter(c => c && c !== 'local').length;
 
     if (isServer) {
-      // Dedicated host: need both players
       updateWaitStatus(remoteCount);
       if (playerConns[0] && playerConns[1]) {
         show('game-screen');
@@ -334,7 +469,6 @@ function onIncomingConnection(incoming) {
         beginCountdown();
       }
     } else {
-      // P2P: P2 just joined
       show('game-screen');
       setupGameScreen();
       beginCountdown();
@@ -344,6 +478,7 @@ function onIncomingConnection(incoming) {
 
 // ── Lobby: Join Game ──────────────────────────────────────────────────────────
 document.getElementById('join-btn').addEventListener('click', () => {
+  unlockAudio();
   const code = document.getElementById('code-input').value.trim().toUpperCase();
   if (code.length < 6) { showErr('Enter the 6-character room code'); return; }
 
@@ -362,7 +497,6 @@ document.getElementById('join-btn').addEventListener('click', () => {
       hostConn.on('data', onDataFromHost);
       hostConn.on('close', onPeerLeft);
       btn.disabled = false; btn.textContent = 'Join Game';
-      // Show game screen immediately — assignment arrives in milliseconds
       show('game-screen');
       startRenderLoop();
       scaleCanvas();
@@ -406,7 +540,6 @@ function onPeerLeft() {
 function onDataFromHost(data) {
   if (data.type === 'assigned') {
     myIdx = data.idx;
-    // Style the switch button and YOU badge now that we know our index
     document.getElementById(myIdx === 0 ? 'you1' : 'you2').style.display = 'inline';
     const btn = document.getElementById('sw-btn');
     if (myIdx === 0) {
@@ -422,8 +555,16 @@ function onDataFromHost(data) {
   }
   if (data.type !== 'state') return;
   const s = data.state;
-  if (gameState && gameState.winner !== null && s.winner === null) trails = [[], []];
+  // Sync map for remote players
+  if (s.mapIdx !== undefined && MAPS[s.mapIdx]) {
+    activeHoops = MAPS[s.mapIdx].hoops;
+  }
+  if (gameState && gameState.winner !== null && s.winner === null) {
+    trails = [[], []];
+    prevScores = [-1, -1]; prevWinner = null; prevCountdown = null;
+  }
   gameState = s;
+  checkAudioEvents();
   refreshUI();
   refreshBtn();
 }
@@ -435,7 +576,7 @@ function onDataFromPlayer(data, playerIdx) {
   if (data.type === 'restart' && gameState.winner !== null) restartGame();
 }
 
-// ── Broadcast state to all remote players ─────────────────────────────────────
+// ── Broadcast state ───────────────────────────────────────────────────────────
 function broadcast() {
   playerConns.forEach(c => {
     if (c && c !== 'local' && c.open) c.send({ type: 'state', state: gameState });
@@ -444,11 +585,13 @@ function broadcast() {
 
 // ── Game logic (runs on host) ─────────────────────────────────────────────────
 function makeState() {
+  const map = MAPS[selectedMapIdx];
   return {
-    players: [
-      { hoop: 0, angle: Math.PI * 0.5, speed: 0.018, dir:  1, score: 0, lapCount: 0, lastAngle: Math.PI * 0.5, switchCooldown: 0 },
-      { hoop: 2, angle: Math.PI * 1.5, speed: 0.022, dir: -1, score: 0, lapCount: 0, lastAngle: Math.PI * 1.5, switchCooldown: 0 },
-    ],
+    mapIdx: selectedMapIdx,
+    players: map.starts.map(s => ({
+      hoop: s.hoop, angle: s.angle, speed: s.speed, dir: s.dir,
+      score: 0, lapCount: 0, lastAngle: s.angle, switchCooldown: 0,
+    })),
     stars: genStars(),
     gameActive: false,
     winner: null,
@@ -458,7 +601,7 @@ function makeState() {
 
 function genStars() {
   const s = [];
-  for (let h = 0; h < 3; h++) {
+  for (let h = 0; h < activeHoops.length; h++) {
     s.push(
       { hoop: h, angle: Math.random() * Math.PI * 2,           collected: false },
       { hoop: h, angle: Math.random() * Math.PI * 2 + Math.PI, collected: false }
@@ -472,14 +615,14 @@ function doSwitch(state, idx) {
   if (p.switchCooldown > 0) return;
   const pos = hPos(p.hoop, p.angle);
   let best = null, bestDiff = Infinity;
-  HOOPS.forEach((h, i) => {
+  activeHoops.forEach((h, i) => {
     if (i === p.hoop) return;
     const dx = pos.x - h.x, dy = pos.y - h.y;
     const diff = Math.abs(Math.sqrt(dx * dx + dy * dy) - h.r);
     if (diff < 28 && diff < bestDiff) { bestDiff = diff; best = i; }
   });
   if (best !== null) {
-    const h = HOOPS[best];
+    const h = activeHoops[best];
     p.angle = Math.atan2(pos.y - h.y, pos.x - h.x);
     p.hoop = best;
     p.switchCooldown = SW_COOL;
@@ -504,7 +647,11 @@ function tick(state, dt) {
       if (dx * dx + dy * dy < 324) {
         s.collected = true; p.score++;
         if (p.score >= WIN_SCORE) { state.gameActive = false; state.winner = i; }
-        setTimeout(() => { s.hoop = Math.floor(Math.random() * 3); s.angle = Math.random() * Math.PI * 2; s.collected = false; }, STAR_RESP);
+        setTimeout(() => {
+          s.hoop = Math.floor(Math.random() * activeHoops.length);
+          s.angle = Math.random() * Math.PI * 2;
+          s.collected = false;
+        }, STAR_RESP);
       }
     }
   });
@@ -518,6 +665,8 @@ function stopTimers() {
 function beginCountdown() {
   stopTimers();
   trails = [[], []];
+  prevScores = [-1, -1]; prevWinner = null; prevCountdown = null;
+  activeHoops = MAPS[selectedMapIdx].hoops;
   gameState = makeState();
   gameState.countdown = 3;
   broadcast(); refreshUI(); refreshBtn();
@@ -546,6 +695,7 @@ function startLoop() {
   gameTimer = setInterval(() => {
     const now = Date.now();
     tick(gameState, now - last); last = now;
+    checkAudioEvents();
     broadcast();
     if (!gameState.gameActive) {
       clearInterval(gameTimer); gameTimer = null;
@@ -559,16 +709,33 @@ function restartGame() {
   setTimeout(beginCountdown, 400);
 }
 
+// ── Audio events ──────────────────────────────────────────────────────────────
+function checkAudioEvents() {
+  if (!gameState) return;
+  const { players, winner, countdown } = gameState;
+
+  players.forEach((p, i) => {
+    if (p.score > prevScores[i]) { playCollectSnd(); prevScores[i] = p.score; }
+  });
+
+  if (winner !== null && prevWinner === null) playWinSnd();
+  prevWinner = winner;
+
+  if (countdown !== prevCountdown) {
+    if (countdown !== null && countdown > 0) playCountdownSnd();
+    if (countdown === 0) playGoSnd();
+    prevCountdown = countdown;
+  }
+}
+
 // ── Game screen ───────────────────────────────────────────────────────────────
 function setupGameScreen() {
   if (isServer) {
-    // Dedicated host: no player badge, neutral switch button (shows "HOST")
     const btn = document.getElementById('sw-btn');
     btn.style.background  = 'rgba(180,180,220,0.08)';
     btn.style.borderColor = 'rgba(180,180,220,0.3)';
     btn.style.color       = 'rgba(180,180,220,0.5)';
   } else if (myIdx !== null) {
-    // P1/P2 who is also the host (P2P mode)
     document.getElementById(myIdx === 0 ? 'you1' : 'you2').style.display = 'inline';
     const btn = document.getElementById('sw-btn');
     if (myIdx === 0) {
@@ -581,7 +748,6 @@ function setupGameScreen() {
       btn.style.color       = '#f5a06e';
     }
   }
-  // Remote players (myIdx=null at this point) are styled in onDataFromHost
 
   scaleCanvas();
   window.addEventListener('resize', scaleCanvas);
@@ -607,16 +773,17 @@ const swBtn = document.getElementById('sw-btn');
 function handleSwitch() {
   if (!gameState) return;
   if (gameState.gameActive) {
+    playSwitchSnd();
     if (isHost && myIdx === 0) {
-      doSwitch(gameState, 0);               // P2P P1: local
+      doSwitch(gameState, 0);
     } else if (!isHost && hostConn?.open) {
-      hostConn.send({ type: 'switch' });    // remote player
+      hostConn.send({ type: 'switch' });
     }
   } else if (gameState.winner !== null) {
     if (isServer || myIdx === 0) {
-      restartGame();                         // host or P1: restart directly
+      restartGame();
     } else if (hostConn?.open) {
-      hostConn.send({ type: 'restart' });   // remote P1 or P2: ask host
+      hostConn.send({ type: 'restart' });
     }
   }
 }
@@ -633,7 +800,6 @@ function refreshBtn() {
   const s = gameState;
 
   if (isServer) {
-    // Dedicated host shows "HOSTING" during play, "PLAY AGAIN" after game ends
     if (!s || s.countdown !== null || s.gameActive) {
       swBtn.textContent = 'HOSTING'; swBtn.disabled = true;
     } else if (s.winner !== null) {
@@ -669,17 +835,36 @@ function refreshUI() {
 }
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
-function drawHoop(h, idx) {
-  ctx.save();
-  ctx.strokeStyle = 'rgba(180,180,220,0.18)'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, Math.PI * 2); ctx.stroke();
-  if (idx < HOOPS.length - 1) {
-    const ix = (h.x + HOOPS[idx + 1].x) / 2;
-    ctx.strokeStyle = 'rgba(180,180,220,0.12)'; ctx.setLineDash([4, 8]); ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(ix - 18, h.y - 2); ctx.lineTo(ix + 18, h.y - 2); ctx.stroke();
-    ctx.setLineDash([]);
+function drawMap() {
+  // Hoops
+  activeHoops.forEach(h => {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(180,180,220,0.18)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  });
+  // Dashed connectors between overlapping hoops
+  for (let i = 0; i < activeHoops.length; i++) {
+    for (let j = i + 1; j < activeHoops.length; j++) {
+      const a = activeHoops[i], b = activeHoops[j];
+      if (Math.hypot(b.x - a.x, b.y - a.y) < a.r + b.r) {
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const len = Math.hypot(dx, dy);
+        // perpendicular direction
+        const nx = -dy / len * 18, ny = dx / len * 18;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(180,180,220,0.12)';
+        ctx.setLineDash([4, 8]); ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(mx - nx, my - ny);
+        ctx.lineTo(mx + nx, my + ny);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
   }
-  ctx.restore();
 }
 
 function drawStar(s) {
@@ -709,7 +894,7 @@ function drawTrain(p, idx) {
     ctx.beginPath(); ctx.arc(pt.x, pt.y, 3 * (i / trails[idx].length), 0, Math.PI * 2); ctx.fill();
   });
   ctx.restore();
-  const h = HOOPS[p.hoop];
+  const h = activeHoops[p.hoop];
   const tang = Math.atan2(y - h.y, x - h.x) + Math.PI / 2 * p.dir;
   ctx.save();
   ctx.translate(x, y); ctx.rotate(tang);
@@ -745,7 +930,7 @@ function drawOverlay(big, small, color) {
 function renderLoop() {
   requestAnimationFrame(renderLoop);
   ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, W, H);
-  HOOPS.forEach(drawHoop);
+  drawMap();
 
   if (!gameState) {
     const msg = isServer
@@ -768,7 +953,7 @@ function renderLoop() {
 
 // Initial canvas paint
 ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, W, H);
-HOOPS.forEach(drawHoop);
+drawMap();
 </script>
 </body>
 </html>
