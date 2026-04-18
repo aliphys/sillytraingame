@@ -92,6 +92,31 @@ html, body { height: 100%; background: #12121f; color: #e8e8f0; font-family: sys
 .map-pick-name { display: block; font-size: 13px; font-weight: 700; color: #e8e8f0; }
 .map-pick-desc { display: block; font-size: 10px; color: rgba(255,255,255,0.32); margin-top: 2px; }
 
+/* IoT controller row */
+.iot-row {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 10px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+}
+.iot-row-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.7px; color: rgba(255,255,255,0.28); flex: 1;
+}
+.iot-device { display: flex; align-items: center; gap: 5px; font-size: 12px; color: rgba(255,255,255,0.4); }
+.iot-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgba(255,255,255,0.15); flex-shrink: 0;
+  transition: background 0.3s;
+}
+.iot-dot.connected { background: #5ddc8a; box-shadow: 0 0 6px #5ddc8a88; }
+.iot-dot.error     { background: #ff6b6b; }
+.btn-iot {
+  padding: 7px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #e8e8f0;
+  -webkit-tap-highlight-color: transparent; white-space: nowrap;
+}
+.btn-iot:active { background: rgba(255,255,255,0.12); }
+
 #game-screen { display: none; flex-direction: column; height: 100dvh; padding: 8px; gap: 8px; }
 #game-screen.active { display: flex; }
 
@@ -139,6 +164,19 @@ html, body { height: 100%; background: #12121f; color: #e8e8f0; font-family: sys
       <span class="map-pick-name">Grid</span>
       <span class="map-pick-desc">2×2 loops</span>
     </div>
+  </div>
+  <!-- IoT controller status row -->
+  <div class="iot-row">
+    <span class="iot-row-label">IoT Controllers</span>
+    <div class="iot-device">
+      <div class="iot-dot" id="iot-dot-0"></div>
+      <span>P1</span>
+    </div>
+    <div class="iot-device">
+      <div class="iot-dot" id="iot-dot-1"></div>
+      <span>P2</span>
+    </div>
+    <button class="btn-iot" id="iot-btn">Connect</button>
   </div>
   <button class="btn-host" id="host-btn">Host a Game</button>
   <div class="divider">or play directly</div>
@@ -273,6 +311,25 @@ let prevScores    = [-1, -1];
 let prevWinner    = null;
 let prevCountdown = null;
 
+// ── IoT ───────────────────────────────────────────────────────────────────────
+const IOT_WS_URLS = [
+  'wss://gateway.atech.dev/ws/live/00c0d18a-5429-47ef-b0fc-0bf31fc4f7b7',
+  'wss://gateway.atech.dev/ws/live/792273b9-5261-43b7-a82b-8c6b41f5550a',
+];
+const IOT_DEVICE_IDS = [
+  '00c0d18a-5429-47ef-b0fc-0bf31fc4f7b7',
+  '792273b9-5261-43b7-a82b-8c6b41f5550a',
+];
+const IOT_P_RGB = [[110, 198, 245], [245, 160, 110]]; // player LED colors
+
+let iotWs         = [null, null];
+let iotEnabled    = false;
+let iotFlashTimer = [null, null];
+// separate tracking for IoT (only runs on host)
+let iotPrevScores    = [-1, -1];
+let iotPrevWinner    = null;
+let iotPrevCountdown = null;
+
 // ── Canvas ───────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('gc');
 const ctx    = canvas.getContext('2d');
@@ -330,6 +387,118 @@ function playWinSnd() {
     playTone(freq, freq, 'sine', 0.18, 0.28, audioCtx.currentTime + i * 0.13);
   });
 }
+
+// ── IoT functions ─────────────────────────────────────────────────────────────
+function updateIoTDot(playerIdx, state) {
+  const dot = document.getElementById(`iot-dot-${playerIdx}`);
+  dot.className = 'iot-dot' + (state === 'connected' ? ' connected' : state === 'error' ? ' error' : '');
+}
+
+function sendToDevice(playerIdx, action, value) {
+  const ws = iotWs[playerIdx];
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({
+    type: 'send_to_device',
+    device_id: IOT_DEVICE_IDS[playerIdx],
+    payload: { action, value },
+  }));
+}
+
+function setDeviceColor(playerIdx, r, g, b) {
+  sendToDevice(playerIdx, 'set_row', `0,${r},${g},${b}`);
+}
+
+function flashDevice(playerIdx, r, g, b, ms) {
+  setDeviceColor(playerIdx, r, g, b);
+  if (iotFlashTimer[playerIdx]) clearTimeout(iotFlashTimer[playerIdx]);
+  const [pr, pg, pb] = IOT_P_RGB[playerIdx];
+  iotFlashTimer[playerIdx] = setTimeout(() => {
+    iotFlashTimer[playerIdx] = null;
+    setDeviceColor(playerIdx, pr, pg, pb);
+  }, ms);
+}
+
+function onIoTButtonPress(playerIdx) {
+  unlockAudio();
+  if (!gameState) return;
+  if (gameState.gameActive) {
+    playSwitchSnd();
+    flashDevice(playerIdx, 255, 255, 255, 130); // white flash on press
+    doSwitch(gameState, playerIdx);
+  } else if (gameState.winner !== null && (playerIdx === 0 || isServer)) {
+    restartGame();
+  }
+}
+
+function checkIoTFeedback() {
+  if (!iotEnabled || !gameState) return;
+  const { players, winner, countdown } = gameState;
+
+  // Star collected — yellow flash on that player's device
+  players.forEach((p, i) => {
+    if (p.score > iotPrevScores[i]) {
+      flashDevice(i, 220, 200, 50, 450);
+      iotPrevScores[i] = p.score;
+    }
+  });
+
+  // Game over — green for winner, dark red for loser
+  if (winner !== null && iotPrevWinner === null) {
+    setDeviceColor(winner,     0, 220, 80);
+    setDeviceColor(1 - winner, 120, 15, 15);
+  }
+  iotPrevWinner = winner;
+
+  // Countdown ticks — pulse player color; GO = full player color
+  if (countdown !== iotPrevCountdown) {
+    if (countdown !== null && countdown > 0) {
+      IOT_P_RGB.forEach(([r, g, b], i) => flashDevice(i, r, g, b, 350));
+    }
+    if (countdown === 0) {
+      IOT_P_RGB.forEach(([r, g, b], i) => setDeviceColor(i, r, g, b));
+    }
+    iotPrevCountdown = countdown;
+  }
+}
+
+function connectIoT() {
+  iotEnabled = true;
+  IOT_WS_URLS.forEach((url, idx) => {
+    if (iotWs[idx]) iotWs[idx].close();
+    updateIoTDot(idx, '');
+
+    const ws = new WebSocket(url);
+    iotWs[idx] = ws;
+
+    ws.onopen = () => {
+      updateIoTDot(idx, 'connected');
+      // Dim neutral glow while in lobby
+      sendToDevice(idx, 'set_row', '0,20,20,40');
+    };
+
+    ws.onmessage = e => {
+      let msg;
+      try { msg = JSON.parse(e.data); } catch { return; }
+
+      if (msg.type === 'device_connected')    updateIoTDot(idx, 'connected');
+      if (msg.type === 'device_disconnected') updateIoTDot(idx, '');
+
+      if (msg.type === 'device_event' && msg.payload?.key === 'button_press') {
+        // Only the host handles IoT input — remote players use the normal switch path
+        if (isHost || isServer) onIoTButtonPress(idx);
+      }
+    };
+
+    ws.onclose = () => updateIoTDot(idx, '');
+    ws.onerror = () => updateIoTDot(idx, 'error');
+  });
+}
+
+document.getElementById('iot-btn').addEventListener('click', () => {
+  unlockAudio();
+  connectIoT();
+  document.getElementById('iot-btn').textContent = 'Reconnect';
+});
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function show(id) {
@@ -666,9 +835,12 @@ function beginCountdown() {
   stopTimers();
   trails = [[], []];
   prevScores = [-1, -1]; prevWinner = null; prevCountdown = null;
+  iotPrevScores = [-1, -1]; iotPrevWinner = null; iotPrevCountdown = null;
   activeHoops = MAPS[selectedMapIdx].hoops;
   gameState = makeState();
   gameState.countdown = 3;
+  // Dim devices during countdown lead-in
+  if (iotEnabled) IOT_P_RGB.forEach(([r, g, b], i) => setDeviceColor(i, Math.round(r*0.25), Math.round(g*0.25), Math.round(b*0.25)));
   broadcast(); refreshUI(); refreshBtn();
 
   let n = 3;
@@ -680,12 +852,12 @@ function beginCountdown() {
       broadcast(); refreshUI();
       setTimeout(() => {
         gameState.countdown = null; gameState.gameActive = true;
-        broadcast(); refreshUI(); refreshBtn();
+        broadcast(); refreshUI(); refreshBtn(); checkIoTFeedback();
         startLoop();
       }, 600);
     } else {
       gameState.countdown = n;
-      broadcast(); refreshUI();
+      broadcast(); refreshUI(); checkIoTFeedback();
     }
   }, 1000);
 }
@@ -696,6 +868,7 @@ function startLoop() {
     const now = Date.now();
     tick(gameState, now - last); last = now;
     checkAudioEvents();
+    checkIoTFeedback();
     broadcast();
     if (!gameState.gameActive) {
       clearInterval(gameTimer); gameTimer = null;
