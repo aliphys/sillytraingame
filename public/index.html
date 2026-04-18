@@ -610,17 +610,25 @@ document.getElementById('host-btn').addEventListener('click', () => {
   peer.on('open', () => {
     isHost = true; isServer = true; myIdx = null;
     playerConns = [null, null];
-    setWaitScreen(
-      'You are the Host',
-      'Share this code with both players:',
-      'Waiting for players… (0/2)',
-      'rgba(180,180,220,0.8)'
-    );
-    document.getElementById('room-code').textContent = code;
-    const link = `${location.origin}${location.pathname}?room=${code}`;
-    document.getElementById('share-url').textContent = link;
     btn.disabled = false; btn.textContent = 'Host a Game';
-    show('wait-screen');
+
+    if (iotEnabled) {
+      // IoT devices are the controllers — start immediately
+      show('game-screen');
+      setupGameScreen();
+      beginCountdown();
+    } else {
+      setWaitScreen(
+        'You are the Host',
+        'Share this code with both players:',
+        'Waiting for players… (0/2)',
+        'rgba(180,180,220,0.8)'
+      );
+      document.getElementById('room-code').textContent = code;
+      const link = `${location.origin}${location.pathname}?room=${code}`;
+      document.getElementById('share-url').textContent = link;
+      show('wait-screen');
+    }
   });
 
   peer.on('connection', onIncomingConnection);
