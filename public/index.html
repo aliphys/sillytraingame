@@ -3,90 +3,108 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#12121f">
+<meta name="theme-color" content="#FFFFFF">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Hoop Trains</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
+:root {
+  --bg: #FFFFFF;
+  --ink: #111111;
+  --muted: #6B6B6B;
+  --faint: #C8C8C8;
+  --accent: #C8102E;
+  --paga: #645FA2;
+  --oresund: #8A8F97;
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; background: #12121f; color: #e8e8f0; font-family: system-ui, -apple-system, sans-serif; }
+html, body {
+  height: 100%; background: var(--bg); color: var(--ink);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-feature-settings: 'tnum' 1;
+}
 
 /* ── Lobby / Waiting screens ─────────────────────────────────────────────── */
 .screen {
-  display: none; flex-direction: column; align-items: center; justify-content: center;
-  gap: 16px; min-height: 100dvh; padding: 28px 24px; max-width: 440px; margin: 0 auto;
+  display: none; flex-direction: column; align-items: flex-start; justify-content: center;
+  gap: 18px; min-height: 100dvh; padding: 32px 24px; max-width: 440px; margin: 0 auto;
 }
 .screen.active { display: flex; }
 
-.title  { font-size: 30px; font-weight: 900; letter-spacing: -1px; }
-.sub    { font-size: 14px; color: rgba(255,255,255,0.4); text-align: center; line-height: 1.65; }
-.err    { font-size: 13px; color: #ff6b6b; min-height: 18px; text-align: center; }
+.eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+.title   { font-size: 40px; font-weight: 900; letter-spacing: -1.5px; line-height: 1.1; color: var(--ink); }
+.sub     { font-size: 16px; color: var(--muted); text-align: left; line-height: 1.5; }
+.err     { font-size: 13px; color: var(--accent); min-height: 18px; text-align: left; font-weight: 700; }
 
 .btn-p1 {
-  width: 100%; padding: 17px; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer;
-  background: rgba(110,198,245,0.12); border: 1px solid rgba(110,198,245,0.5); color: #6ec6f5;
-  -webkit-tap-highlight-color: transparent;
+  width: 100%; padding: 18px; border-radius: 12px; font: inherit; font-size: 16px; font-weight: 700;
+  cursor: pointer; background: var(--paga); border: 1px solid var(--paga); color: #FFFFFF;
+  -webkit-tap-highlight-color: transparent; transition: transform 0.08s;
 }
-.btn-p1:active:not(:disabled) { background: rgba(110,198,245,0.25); }
-.btn-p1:disabled { opacity: 0.4; cursor: default; }
+.btn-p1:active:not(:disabled) { transform: scale(0.98); }
+.btn-p1:disabled { opacity: 0.35; cursor: default; }
 
 .btn-p2 {
-  width: 100%; padding: 17px; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer;
-  background: rgba(245,160,110,0.12); border: 1px solid rgba(245,160,110,0.5); color: #f5a06e;
-  -webkit-tap-highlight-color: transparent;
+  width: 100%; padding: 18px; border-radius: 12px; font: inherit; font-size: 16px; font-weight: 700;
+  cursor: pointer; background: var(--ink); border: 1px solid var(--ink); color: #FFFFFF;
+  -webkit-tap-highlight-color: transparent; transition: transform 0.08s;
 }
-.btn-p2:active:not(:disabled) { background: rgba(245,160,110,0.25); }
-.btn-p2:disabled { opacity: 0.4; cursor: default; }
+.btn-p2:active:not(:disabled) { transform: scale(0.98); }
+.btn-p2:disabled { opacity: 0.35; cursor: default; }
 
 .divider {
   display: flex; align-items: center; gap: 10px; width: 100%;
-  font-size: 12px; color: rgba(255,255,255,0.2);
+  font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase;
 }
-.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.1); }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--faint); }
 
 .code-input {
-  width: 100%; padding: 16px; border-radius: 14px; outline: none;
-  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
-  color: #e8e8f0; font-size: 22px; font-weight: 900; letter-spacing: 6px;
+  width: 100%; padding: 16px; border-radius: 12px; outline: none;
+  background: var(--bg); border: 1px solid var(--faint);
+  color: var(--ink); font: inherit; font-size: 22px; font-weight: 900; letter-spacing: 6px;
   text-align: center; text-transform: uppercase;
 }
-.code-input:focus { border-color: rgba(245,160,110,0.5); }
+.code-input::placeholder { color: var(--faint); }
+.code-input:focus { border-color: var(--ink); }
 
-.big-code   { font-size: 52px; font-weight: 900; letter-spacing: 10px; color: #6ec6f5; }
+.big-code   { font-size: 52px; font-weight: 900; letter-spacing: 8px; color: var(--ink); align-self: center; }
 .share-box  {
   width: 100%; padding: 12px 14px; border-radius: 10px;
-  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-  font-size: 12px; color: rgba(255,255,255,0.35); text-align: center; word-break: break-all;
+  background: var(--bg); border: 1px solid var(--faint);
+  font-size: 12px; color: var(--muted); text-align: center; word-break: break-all;
 }
 .btn-copy {
-  padding: 10px 22px; border-radius: 8px; cursor: pointer;
-  background: transparent; border: 1px solid rgba(255,255,255,0.2);
-  color: rgba(255,255,255,0.55); font-size: 13px;
+  padding: 10px 22px; border-radius: 8px; cursor: pointer; font: inherit;
+  background: var(--bg); border: 1px solid var(--faint);
+  color: var(--ink); font-size: 13px; font-weight: 700; align-self: center;
   -webkit-tap-highlight-color: transparent;
 }
-.btn-copy:active { background: rgba(255,255,255,0.08); }
-.wait-label { font-size: 14px; color: rgba(255,255,255,0.35); }
+.btn-copy:active { background: #F5F5F5; }
+.wait-label { font-size: 14px; color: var(--muted); align-self: center; }
 
 /* ── Game screen ─────────────────────────────────────────────────────────── */
-#game-screen { display: none; flex-direction: column; height: 100dvh; padding: 8px; gap: 8px; }
+#game-screen { display: none; flex-direction: column; height: 100dvh; padding: 10px; gap: 10px; background: var(--bg); }
 #game-screen.active { display: flex; }
 
 #score-bar {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 8px 14px; background: rgba(255,255,255,0.06); border-radius: 10px;
-  flex-shrink: 0; font-size: 13px; gap: 8px;
+  padding: 10px 16px; background: var(--bg); border: 1px solid var(--faint); border-radius: 10px;
+  flex-shrink: 0; font-size: 13px; gap: 8px; color: var(--ink);
 }
-.pi  { display: flex; align-items: center; gap: 6px; }
+.pi  { display: flex; align-items: center; gap: 6px; font-weight: 700; }
 .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.pts { font-weight: 900; font-size: 17px; }
-.you { font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 4px; }
-#status { font-size: 12px; color: rgba(255,255,255,0.35); text-align: center; flex: 1; }
+.pts { font-weight: 900; font-size: 18px; }
+.you { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; letter-spacing: 1px; }
+#status { font-size: 12px; color: var(--muted); text-align: center; flex: 1; font-weight: 700; letter-spacing: 0.5px; }
 
 #canvas-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
-#gc { display: block; background: #1a1a2e; border-radius: 10px; max-width: 100%; max-height: 100%; }
+#gc { display: block; background: var(--bg); border: 1px solid var(--faint); border-radius: 10px; max-width: 100%; max-height: 100%; }
 
 #sw-btn {
-  flex-shrink: 0; width: 100%; padding: 20px; border-radius: 16px; border: 2px solid;
-  font-size: 22px; font-weight: 900; letter-spacing: 3px; cursor: pointer;
+  flex-shrink: 0; width: 100%; padding: 22px; border-radius: 14px; border: 1px solid;
+  font: inherit; font-size: 22px; font-weight: 900; letter-spacing: 3px; cursor: pointer;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none;
   transition: opacity 0.15s, transform 0.08s;
 }
@@ -98,38 +116,40 @@ html, body { height: 100%; background: #12121f; color: #e8e8f0; font-family: sys
 
 <!-- ── Lobby ─────────────────────────────────────────────────────────────── -->
 <div class="screen active" id="lobby-screen">
-  <div class="title">Hoop Trains</div>
-  <p class="sub">Race around circular hoops, switch tracks, collect stars.<br>First to 5 points wins!</p>
-  <button class="btn-p1" id="create-btn">Create Game — Player 1</button>
-  <div class="divider">or join as Player 2</div>
+  <div class="eyebrow">Hoop Trains · Lund · April 2026</div>
+  <div class="title">You're on the train.</div>
+  <p class="sub">Pick a line. Tap to hop. First to five stars.</p>
+  <button class="btn-p1" id="create-btn">Start a carriage</button>
+  <div class="divider">or join</div>
   <input class="code-input" id="code-input" type="text" maxlength="6" placeholder="ROOM CODE" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
-  <button class="btn-p2" id="join-btn">Join Game — Player 2</button>
+  <button class="btn-p2" id="join-btn">Hop on</button>
   <p class="err" id="lobby-err"></p>
 </div>
 
 <!-- ── Waiting (P1 sees this until P2 joins) ─────────────────────────────── -->
 <div class="screen" id="wait-screen">
-  <p class="sub" style="color:rgba(110,198,245,0.8);font-weight:700">You are Player 1</p>
-  <p class="sub">Share this code with Player 2:</p>
+  <div class="eyebrow" style="color:var(--paga)">You are Player 1</div>
+  <div class="title">Share the code.</div>
+  <p class="sub">Send this to whoever's riding with you.</p>
   <div class="big-code" id="room-code">------</div>
   <div class="share-box" id="share-url"></div>
-  <button class="btn-copy" id="copy-btn">Copy Link</button>
-  <p class="wait-label">Waiting for Player 2…</p>
+  <button class="btn-copy" id="copy-btn">Copy link</button>
+  <p class="wait-label">Waiting for the next rider…</p>
 </div>
 
 <!-- ── Game ──────────────────────────────────────────────────────────────── -->
 <div id="game-screen">
   <div id="score-bar">
     <div class="pi">
-      <div class="dot" style="background:#6ec6f5"></div>
+      <div class="dot" style="background:#645FA2"></div>
       P1&nbsp;<span class="pts" id="s1">0</span>
-      <span class="you" id="you1" style="background:rgba(110,198,245,0.2);color:#6ec6f5;display:none">YOU</span>
+      <span class="you" id="you1" style="background:#645FA2;color:#FFFFFF;display:none">YOU</span>
     </div>
-    <div id="status">●</div>
+    <div id="status">—</div>
     <div class="pi">
-      <span class="you" id="you2" style="background:rgba(245,160,110,0.2);color:#f5a06e;display:none">YOU</span>
+      <span class="you" id="you2" style="background:#111111;color:#FFFFFF;display:none">YOU</span>
       <span class="pts" id="s2">0</span>&nbsp;P2
-      <div class="dot" style="background:#f5a06e"></div>
+      <div class="dot" style="background:#111111"></div>
     </div>
   </div>
   <div id="canvas-wrap"><canvas id="gc" width="680" height="420"></canvas></div>
@@ -145,9 +165,9 @@ const HOOPS = [
   { x: 340, y: 210, r: 120 },
   { x: 510, y: 210, r: 120 },
 ];
-const P_COLORS    = ['#6ec6f5', '#f5a06e'];
-const P_RGB       = ['110,198,245', '245,160,110'];
-const STAR_COL    = '#f5e56e';
+const P_COLORS    = ['#645FA2', '#111111'];
+const P_RGB       = ['100,95,162', '17,17,17'];
+const STAR_COL    = '#C8102E';
 const SW_COOL     = 1200;
 const WIN_SCORE   = 5;
 const STAR_RESP   = 1800;
@@ -464,13 +484,13 @@ function setupGameScreen() {
   document.getElementById(myIdx === 0 ? 'you1' : 'you2').style.display = 'inline';
   const btn = document.getElementById('sw-btn');
   if (myIdx === 0) {
-    btn.style.background  = 'rgba(110,198,245,0.12)';
-    btn.style.borderColor = 'rgba(110,198,245,0.55)';
-    btn.style.color       = '#6ec6f5';
+    btn.style.background  = '#645FA2';
+    btn.style.borderColor = '#645FA2';
+    btn.style.color       = '#FFFFFF';
   } else {
-    btn.style.background  = 'rgba(245,160,110,0.12)';
-    btn.style.borderColor = 'rgba(245,160,110,0.55)';
-    btn.style.color       = '#f5a06e';
+    btn.style.background  = '#111111';
+    btn.style.borderColor = '#111111';
+    btn.style.color       = '#FFFFFF';
   }
   scaleCanvas();
   window.addEventListener('resize', scaleCanvas);
@@ -525,21 +545,21 @@ function refreshUI() {
   document.getElementById('s2').textContent = gameState.players[1].score;
   const { countdown, gameActive, winner } = gameState;
   const el = document.getElementById('status');
-  if (countdown !== null && countdown > 0) el.textContent = `Starting in ${countdown}…`;
-  else if (countdown === 0)                el.textContent = 'GO!';
-  else if (winner !== null)                el.textContent = `P${winner + 1} wins!`;
-  else if (gameActive)                     el.textContent = '★ Collect stars!';
-  else                                     el.textContent = '●';
+  if (countdown !== null && countdown > 0) el.textContent = `STARTING IN ${countdown}`;
+  else if (countdown === 0)                el.textContent = 'GO';
+  else if (winner !== null)                el.textContent = `P${winner + 1} WINS`;
+  else if (gameActive)                     el.textContent = 'COLLECT STARS';
+  else                                     el.textContent = '—';
 }
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
 function drawHoop(h, idx) {
   ctx.save();
-  ctx.strokeStyle = 'rgba(180,180,220,0.18)'; ctx.lineWidth = 2;
+  ctx.strokeStyle = '#C8C8C8'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, Math.PI * 2); ctx.stroke();
   if (idx < HOOPS.length - 1) {
     const ix = (h.x + HOOPS[idx + 1].x) / 2;
-    ctx.strokeStyle = 'rgba(180,180,220,0.12)'; ctx.setLineDash([4, 8]); ctx.lineWidth = 1;
+    ctx.strokeStyle = '#C8C8C8'; ctx.setLineDash([4, 8]); ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(ix - 18, h.y - 2); ctx.lineTo(ix + 18, h.y - 2); ctx.stroke();
     ctx.setLineDash([]);
   }
@@ -579,7 +599,7 @@ function drawTrain(p, idx) {
   ctx.translate(x, y); ctx.rotate(tang);
   ctx.fillStyle = col;
   ctx.beginPath(); ctx.roundRect(-7, -5, 14, 10, 3); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
   ctx.beginPath(); ctx.arc(5, 0, 2.5, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = col;
   ctx.beginPath(); ctx.arc(-3, -5, 2, 0, Math.PI * 2); ctx.arc(3, -5, 2, 0, Math.PI * 2); ctx.fill();
@@ -595,34 +615,35 @@ function drawTrain(p, idx) {
 
 function drawOverlay(big, small, color) {
   ctx.save();
-  ctx.fillStyle = 'rgba(26,26,46,0.85)'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.fillRect(0, 0, W, H);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = color || '#e8e8f0'; ctx.font = 'bold 42px system-ui';
+  ctx.fillStyle = color || '#111111';
+  ctx.font = '900 48px Inter, system-ui';
   ctx.fillText(big, W / 2, H / 2 - (small ? 24 : 0));
   if (small) {
-    ctx.font = '16px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.fillText(small, W / 2, H / 2 + 22);
+    ctx.font = '500 16px Inter, system-ui'; ctx.fillStyle = '#6B6B6B';
+    ctx.fillText(small, W / 2, H / 2 + 26);
   }
   ctx.restore();
 }
 
 function renderLoop() {
   requestAnimationFrame(renderLoop);
-  ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H);
   HOOPS.forEach(drawHoop);
-  if (!gameState) { drawOverlay('Waiting…', null, '#e8e8f0'); return; }
+  if (!gameState) { drawOverlay('Waiting…', null, '#111111'); return; }
   const { players, stars, gameActive, winner, countdown } = gameState;
   stars.forEach(drawStar);
   players.forEach(drawTrain);
   if (countdown !== null) {
-    drawOverlay(countdown > 0 ? String(countdown) : 'GO!', 'Get ready…', '#e8e8f0');
+    drawOverlay(countdown > 0 ? String(countdown) : 'GO', 'Get ready.', '#111111');
   } else if (winner !== null) {
-    drawOverlay(`Player ${winner + 1} Wins!`, `P1: ${players[0].score} pts  |  P2: ${players[1].score} pts`, P_COLORS[winner]);
+    drawOverlay('We made it.', `${players[0].score + players[1].score} stars · P${winner + 1} in front.`, '#111111');
   }
 }
 
 // Initial canvas paint
-ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, W, H);
+ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H);
 HOOPS.forEach(drawHoop);
 </script>
 </body>
